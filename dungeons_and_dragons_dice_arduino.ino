@@ -1,5 +1,5 @@
 /*
- *  DnD Dice. Mike Bruins, 2010.
+ *  DnD Dice. Mike Bruins, 2016.
  *
  * Features:
  *  Dice styles d2,d3,d4,d6,d8,d10,d12,d20,d100
@@ -26,11 +26,11 @@
  */
 
 #define VERSION "V1.0 Mike Bruins"
-#include <LCD4Bit_mod.h>
+#include <LiquidCrystal.h>
 #include <Stdio.h>
 
 //create object to control an LCD.
-LCD4Bit_mod lcd = LCD4Bit_mod(2);
+LiquidCrystal lcd(8, 9, 4, 5, 6, 7);           // select the pins used on the LCD panel
 
 // keyboard
 #define KEY_RIGHT   0
@@ -38,6 +38,7 @@ LCD4Bit_mod lcd = LCD4Bit_mod(2);
 #define KEY_DOWN    2
 #define KEY_LEFT    3
 #define KEY_SELECT  4
+#define KEY_NONE    5
 
 // sequence starting at 0
 #define DICE02 0
@@ -77,9 +78,9 @@ long die_result = -1;
 void setup() {
 	pinMode(13, OUTPUT); //we'll use the debug LED to output a heart-beat
 
-	lcd.init();
-	//optionally, now set up our application-specific display settings, overriding whatever the lcd did in lcd.init()
-	lcd.commandWrite(0x0F);//cursor on, display on, blink on.  (nasty!)
+	lcd.begin(16,2);
+        lcd.cursor();
+        lcd.blink();
 	randomSeed(analogRead(1)); // Don't use 0 as keys are on that line.
 	show_die();
 }
@@ -90,20 +91,18 @@ void show_die() {
 	char line1[17];
 	char line2[17];
 	lcd.clear();
-	lcd.cursorTo(1, 0); //line=1, x=0
+        lcd.setCursor(0, 0); // top left
 	sprintf(line1, "%2d D%3d A%2d R%1d", die_rolls, die_type_sides[die_type],
 			die_best_of_rolls_attempts, die_reroll_ones);
-	lcd.printIn(line1);
-	lcd.cursorTo(2, 0);
+	lcd.print(line1);
+        lcd.setCursor(0, 1); // bottom left
 	if (die_result == -1) {
-		lcd.printIn(VERSION);
-		die_result = 0;
+		lcd.print(VERSION);
 	} else if (die_result) {
 		sprintf(line2, "%ld  ", die_result);
-		lcd.printIn(line2);
-		die_result = 0;
+		lcd.print(line2);
 	}
-	lcd.cursorTo(1, cursor_offset[cursor]);
+	lcd.setCursor(cursor_offset[cursor], 0);
 }
 /*
  * Do the dice rolls
@@ -172,6 +171,35 @@ void roll_dice() {
 	// die_result will be holding the total.
 }
 
+int read_LCD_buttons(int sensor){               // read the buttons
+    int adc_key_in = analogRead(sensor);       // read the value from the sensor
+
+    // my buttons when read are centered at these valies: 0, 144, 329, 504, 741
+    // we add approx 50 to those values and check to see if we are close
+    // We make this the 1st option for speed reasons since it will be the most likely result
+
+    if (adc_key_in > 1000) return KEY_NONE;
+
+    // For V1.1 use this threshold
+   /*
+    if (adc_key_in < 50)   return KEY_RIGHT;
+    if (adc_key_in < 250)  return KEY_UP;
+    if (adc_key_in < 450)  return KEY_DOWN;
+    if (adc_key_in < 650)  return KEY_LEFT;
+    if (adc_key_in < 850)  return KEY_SELECT;
+   */
+
+   // For V1.0 comment the other threshold and use the one below:
+     if (adc_key_in < 60)   return KEY_RIGHT;
+     if (adc_key_in < 205)  return KEY_UP;
+     if (adc_key_in < 400)  return KEY_DOWN;
+     if (adc_key_in < 600)  return KEY_LEFT;
+     if (adc_key_in < 800)  return KEY_SELECT;
+
+    return KEY_NONE;                // when all others fail, return this.
+}
+
+
 /*
  * Main loop.
  * Read the keyboard and output the state of the die.
@@ -180,17 +208,12 @@ void roll_dice() {
 void loop() {
 	//Key message
 	static int oldkey = -1;
-	int key;
-	int adc_key_in = analogRead(0); // read the value from the sensor
-	digitalWrite(13, HIGH);
-	key = get_key(adc_key_in); // convert into key press
-
+	int key = read_LCD_buttons(0); // read the value from the sensor
 	if (key != oldkey) // if keypress is detected
 	{
 		delay(50); // wait for debounce time
-		adc_key_in = analogRead(0); // read the value from the sensor
-		key = get_key(adc_key_in); // convert into key press
-		oldkey = key;
+                key = read_LCD_buttons(0); // read the value from the sensor
+                oldkey = key;
 
 		// cursor left
 		if (key == KEY_LEFT) {
@@ -295,24 +318,4 @@ void loop() {
 	//delay(1000);
 	digitalWrite(13, LOW);
 
-}
-
-// Convert ADC value to key number
-int get_key(unsigned int input) {
-	const int adc_key_val[5] = { 30, 150, 360, 535, 760 };
-	const int NUM_KEYS = 5;
-
-	int k;
-
-	for (k = 0; k < NUM_KEYS; k++) {
-		if (input < adc_key_val[k]) {
-
-			return k;
-		}
-	}
-
-	if (k >= NUM_KEYS)
-		k = -1; // No valid key pressed
-
-	return k;
 }
